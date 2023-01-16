@@ -7,26 +7,27 @@ from .backbones import BACKBONES
 
 
 def create_encoder(backbone):
-    try:
-        if 'timm_' in backbone:
-            backbone = backbone.split('_')[-1]
-            timm.create_model(model_name=backbone, pretrained=True)
-        else:
-            model = BACKBONES[backbone](pretrained=True)
-    except RuntimeError or KeyError:
-        raise RuntimeError('Specify the correct backbone name. Either one of torchvision backbones, or a timm backbone.'
-                           'For timm - add prefix \'timm_\'. For instance, timm_resnet18')
+    # try:
+    #     if 'timm_' in backbone:
+    #         backbone = backbone.split('_')[-1]
+    #         timm.create_model(model_name=backbone, pretrained=True)
+    #     else:
+    #         model = BACKBONES[backbone](pretrained=True)
+    model = BACKBONES[backbone]()
+    # except RuntimeError or KeyError:
+    #     raise RuntimeError('Specify the correct backbone name. Either one of torchvision backbones, or a timm backbone.'
+    #                        'For timm - add prefix \'timm_\'. For instance, timm_resnet18')
 
-    layers = torch.nn.Sequential(*list(model.children()))
-    try:
-        potential_last_layer = layers[-1]
-        while not isinstance(potential_last_layer, nn.Linear):
-            potential_last_layer = potential_last_layer[-1]
-    except TypeError:
-        raise TypeError('Can\'t find the linear layer of the model')
+    # layers = torch.nn.Sequential(*list(model.children()))
+    # try:
+    #     potential_last_layer = layers[-1]
+    #     while not isinstance(potential_last_layer, nn.Linear):
+    #         potential_last_layer = potential_last_layer[-1]
+    # except TypeError:
+    #     raise TypeError('Can\'t find the linear layer of the model')
 
-    features_dim = potential_last_layer.in_features
-    model = torch.nn.Sequential(*list(model.children())[:-1])
+    features_dim = model.fc.out_features
+    # model = torch.nn.Sequential(*list(model.children())[:-1])
 
     return model, features_dim
 

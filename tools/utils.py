@@ -16,6 +16,8 @@ from .schedulers import SCHEDULERS
 from .models import SupConModel
 from .datasets import create_supcon_dataset
 
+from torch.utils.data import Subset
+
 
 def seed_everything(seed=42):
     random.seed(seed)
@@ -78,7 +80,7 @@ def build_transforms(second_stage):
     return transforms_dict
 
 
-def build_loaders(data_dir, transforms, batch_sizes, num_workers, second_stage=False):
+def build_loaders(data_dir, transforms, batch_sizes, num_workers, indices, second_stage=False):
     dataset_name = data_dir.split('/')[-1]
 
     if second_stage:
@@ -91,6 +93,7 @@ def build_loaders(data_dir, transforms, batch_sizes, num_workers, second_stage=F
 
         train_supcon_dataset = create_supcon_dataset(dataset_name, data_dir=data_dir, train=True,
                                                transform=TwoCropTransform(transforms['train_transforms']), second_stage=False)
+        train_supcon_dataset = Subset(train_supcon_dataset, indices=indices)
 
     valid_dataset = create_supcon_dataset(dataset_name, data_dir=data_dir, train=False,
                                                transform=transforms['valid_transforms'], second_stage=True)
@@ -115,7 +118,12 @@ def build_model(backbone, second_stage=False, num_classes=None, ckpt_pretrained=
     model = SupConModel(backbone=backbone, second_stage=second_stage, num_classes=num_classes)
 
     if ckpt_pretrained:
-        model.load_state_dict(torch.load(ckpt_pretrained)['model_state_dict'], strict=False)
+        state = torch.load(ckpt_pretrained)['model_state']
+        new_state = state.copy()
+        for key, val in state.items():
+            if 'fc' in key:
+                new_state.pop(key)
+        missing = model.encoder.load_state_dict(new_state, strict=False)
 
     return model
 
@@ -149,10 +157,16 @@ def compute_embeddings(loader, model, scaler):
                 embed = model(images)
                 total_embeddings[idx * bsz: (idx + 1) * bsz] = embed.detach().cpu().numpy()
                 total_labels[idx * bsz: (idx + 1) * bsz] = labels.detach().numpy()
+                import math
+                if math.isnan(total_embeddings[0][0]):
+                    print('wrong calculation!')
         else:
             embed = model(images)
             total_embeddings[idx * bsz: (idx + 1) * bsz] = embed.detach().cpu().numpy()
             total_labels[idx * bsz: (idx + 1) * bsz] = labels.detach().numpy()
+            import math
+            if math.isnan(total_embeddings[0][0]):
+                print('wrong calculation!')
 
         del images, labels, embed
         torch.cuda.empty_cache()

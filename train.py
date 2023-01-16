@@ -8,19 +8,12 @@ import shutil
 from torch.utils.tensorboard import SummaryWriter
 from torch_ema import ExponentialMovingAverage
 
-from tools import utils
-
-scaler = torch.cuda.amp.GradScaler()
+from SupCon.tools import utils
 
 
 def parse_config():
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--config_name",
-        type=str,
-        default="configs/train/train_supcon_resnet18_cifar10_stage2.yml",
-    )
-
+    parser.add_argument("--config_name", type=str, default="configs/train/train_supcon_resnet18_cifar10_stage1.yml")
     parser_args = parser.parse_args()
 
     with open(vars(parser_args)["config_name"], "r") as config_file:
@@ -29,11 +22,7 @@ def parse_config():
     return hyperparams
 
 
-if __name__ == "__main__":
-    # parse hyperparameters
-    hyperparams = parse_config()
-    print(hyperparams)
-
+def train(hyperparams, lSet_indices):
     backbone = hyperparams["model"]["backbone"]
     ckpt_pretrained = hyperparams['model']['ckpt_pretrained']
     num_classes = hyperparams['model']['num_classes']
@@ -55,13 +44,11 @@ if __name__ == "__main__":
     }
     num_workers = hyperparams["dataloaders"]["num_workers"]
 
-    if not amp: scaler = None
-
     utils.seed_everything()
 
     # create model, loaders, optimizer, etc
     transforms = utils.build_transforms(second_stage=(stage == 'second'))
-    loaders = utils.build_loaders(data_dir, transforms, batch_sizes, num_workers, second_stage=(stage == 'second'))
+    loaders = utils.build_loaders(data_dir, transforms, batch_sizes, num_workers, lSet_indices, second_stage=(stage == 'second'))
     model = utils.build_model(backbone, second_stage=(stage == 'second'), num_classes=num_classes, ckpt_pretrained=ckpt_pretrained).cuda()
 
     if ema:
@@ -101,6 +88,12 @@ if __name__ == "__main__":
 
     # epoch loop
     metric_best = 0
+    best_model = model
+
+    scaler = torch.cuda.amp.GradScaler()
+    if not amp:
+        scaler = None
+
     for epoch in range(n_epochs):
         utils.add_to_logs(logging, "{}, epoch {}".format(time.ctime(), epoch))
 
@@ -122,8 +115,9 @@ if __name__ == "__main__":
             valid_metrics_encoder = utils.validation_constructive(loaders['valid_loader'], loaders['train_features_loader'], model, scaler)
             model.use_projection_head(True)
             print(
-                'epoch {}, train time {:.2f} valid time {:.2f} train loss {:.2f}\nvalid acc dict projection head {}\nvalid acc dict encoder {}'.format(
+                'epoch {}/{}, train time {:.2f} valid time {:.2f} train loss {:.2f}\nvalid acc dict projection head {}\nvalid acc dict encoder {}'.format(
                     epoch,
+                    n_epochs,
                     end_training_time - start_training_time,
                     time.time() - start_validation_time,
                     train_metrics['loss'], valid_metrics_projection_head, valid_metrics_encoder))
@@ -131,8 +125,9 @@ if __name__ == "__main__":
         else:
             valid_metrics = utils.validation_ce(model, criterion, loaders['valid_loader'], scaler)
             print(
-                'epoch {}, train time {:.2f} valid time {:.2f} train loss {:.2f}\n valid acc dict {}\n'.format(
+                'epoch {}/{}, train time {:.2f} valid time {:.2f} train loss {:.2f}\n valid acc dict {}\n'.format(
                     epoch,
+                    n_epochs,
                     end_training_time - start_training_time,
                     time.time() - start_validation_time,
                     train_metrics['loss'], valid_metrics))
@@ -168,6 +163,7 @@ if __name__ == "__main__":
                 ),
             )
         # check if the best value of metric changed. If so -> save the model
+        # TODO: check what the metric that checked here!
         if valid_metrics[target_metric] > metric_best:
             utils.add_to_logs(
                 logging,
@@ -192,6 +188,7 @@ if __name__ == "__main__":
                 ),
             )
             metric_best = valid_metrics[target_metric]
+            best_model = model
 
         # if ema is used, go back to regular weights without ema
         if ema:
@@ -200,3 +197,5 @@ if __name__ == "__main__":
         scheduler.step()
 
     writer.close()
+
+    return best_model

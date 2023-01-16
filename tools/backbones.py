@@ -1,9 +1,10 @@
 import torchvision.models as models
+from deepAL.pycls.models.resnet import resnet18
 
 # for timm models we don't have such files, since it provides a simple wrapper timm.create_model. Check tools.models.py
 BACKBONES = {
     "alexnet": models.alexnet,
-    "resnet18": models.resnet18,
+    "resnet18": resnet18,
     "resnet34": models.resnet34,
     "resnet50": models.resnet50,
     "resnet101": models.resnet101,
