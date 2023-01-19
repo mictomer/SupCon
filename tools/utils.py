@@ -157,16 +157,10 @@ def compute_embeddings(loader, model, scaler):
                 embed = model(images)
                 total_embeddings[idx * bsz: (idx + 1) * bsz] = embed.detach().cpu().numpy()
                 total_labels[idx * bsz: (idx + 1) * bsz] = labels.detach().numpy()
-                import math
-                if math.isnan(total_embeddings[0][0]):
-                    print('wrong calculation!')
         else:
             embed = model(images)
             total_embeddings[idx * bsz: (idx + 1) * bsz] = embed.detach().cpu().numpy()
             total_labels[idx * bsz: (idx + 1) * bsz] = labels.detach().numpy()
-            import math
-            if math.isnan(total_embeddings[0][0]):
-                print('wrong calculation!')
 
         del images, labels, embed
         torch.cuda.empty_cache()

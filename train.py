@@ -22,27 +22,27 @@ def parse_config():
     return hyperparams
 
 
-def train(hyperparams, lSet_indices):
-    backbone = hyperparams["model"]["backbone"]
-    ckpt_pretrained = hyperparams['model']['ckpt_pretrained']
-    num_classes = hyperparams['model']['num_classes']
-    amp = hyperparams['train']['amp']
-    ema = hyperparams['train']['ema']
-    ema_decay_per_epoch = hyperparams['train']['ema_decay_per_epoch']
-    n_epochs = hyperparams["train"]["n_epochs"]
-    logging_name = hyperparams['train']['logging_name']
-    target_metric = hyperparams['train']['target_metric']
-    stage = hyperparams['train']['stage']
-    data_dir = hyperparams["dataset"]
-    optimizer_params = hyperparams["optimizer"]
-    scheduler_params = hyperparams["scheduler"]
-    criterion_params = hyperparams["criterion"]
+def train(p_supcon, lSet_indices):
+    backbone = p_supcon["model"]["backbone"]
+    ckpt_pretrained = p_supcon['model']['ckpt_pretrained']
+    num_classes = p_supcon['model']['num_classes']
+    amp = p_supcon['train']['amp']
+    ema = p_supcon['train']['ema']
+    ema_decay_per_epoch = p_supcon['train']['ema_decay_per_epoch']
+    n_epochs = p_supcon["train"]["n_epochs"]
+    logging_name = p_supcon['train']['logging_name']
+    target_metric = p_supcon['train']['target_metric']
+    stage = p_supcon['train']['stage']
+    data_dir = p_supcon["dataset"]
+    optimizer_params = p_supcon["optimizer"]
+    scheduler_params = p_supcon["scheduler"]
+    criterion_params = p_supcon["criterion"]
 
     batch_sizes = {
-        "train_batch_size": hyperparams["dataloaders"]["train_batch_size"],
-        'valid_batch_size': hyperparams['dataloaders']['valid_batch_size']
+        "train_batch_size": p_supcon["dataloaders"]["train_batch_size"],
+        'valid_batch_size': p_supcon['dataloaders']['valid_batch_size']
     }
-    num_workers = hyperparams["dataloaders"]["num_workers"]
+    num_workers = p_supcon["dataloaders"]["num_workers"]
 
     utils.seed_everything()
 
@@ -163,7 +163,6 @@ def train(hyperparams, lSet_indices):
                 ),
             )
         # check if the best value of metric changed. If so -> save the model
-        # TODO: check what the metric that checked here!
         if valid_metrics[target_metric] > metric_best:
             utils.add_to_logs(
                 logging,
@@ -178,14 +177,9 @@ def train(hyperparams, lSet_indices):
             )
 
             torch.save(
-                {
-                    "epoch": epoch,
-                    "model_state_dict": model.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                },
-                "weights/{}/epoch{}".format(
-                    logging_name, epoch
-                ),
+                {"epoch": epoch, "model_state_dict": model.state_dict(),
+                 "optimizer_state_dict": optimizer.state_dict()},
+                "weights/{}/epoch{}".format(logging_name, epoch),
             )
             metric_best = valid_metrics[target_metric]
             best_model = model
@@ -198,4 +192,5 @@ def train(hyperparams, lSet_indices):
 
     writer.close()
 
-    return best_model
+    p_supcon['supcon_model_path'] = os.path.join('results/{}'.format(p_supcon['dataset'].split('/')[1]), f'supcon_checkpoint.pth.tar')
+    torch.save(best_model.state_dict(), p_supcon['supcon_model_path'])
